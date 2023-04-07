@@ -1,0 +1,56 @@
+---
+- name: Install and Configure Apache2 on Ubuntu
+  hosts: all
+  become: yes
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Apache2
+      apt:
+        name: apache2
+        state: present
+
+    - name: Enable Apache2 service at boot
+      systemd:
+        name: apache2
+        enabled: yes
+        state: restarted
+
+    - name: Disable default Apache2 site
+      command: a2dissite 000-default.conf
+      notify:
+        - Restart Apache2
+
+    - name: Create custom Apache2 config
+      copy:
+        content: |
+          <VirtualHost *:8080>
+            ServerAdmin webmaster@localhost
+            DocumentRoot /var/www/html
+            ErrorLog ${APACHE_LOG_DIR}/error.log
+            CustomLog ${APACHE_LOG_DIR}/access.log combined
+          </VirtualHost>
+        dest: /etc/apache2/sites-available/custom_apache2_config.conf
+      notify:
+        - Enable custom config
+        - Restart Apache2
+
+    - name: Configure Apache2 to listen on port 8080
+      lineinfile:
+        path: /etc/apache2/ports.conf
+        regexp: '^Listen 80'
+        line: 'Listen 8080'
+      notify:
+        - Restart Apache2
+
+  handlers:
+    - name: Enable custom config
+      command: a2ensite custom_apache2_config.conf
+
+    - name: Restart Apache2
+      systemd:
+        name: apache2
+        state: restarted
